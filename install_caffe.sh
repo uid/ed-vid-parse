@@ -19,7 +19,10 @@ sudo python get-pip.py
 # sudo apt-get install ffmpeg
 sudo add-apt-repository ppa:mc3man/trusty-media
 sudo apt-get update
-sudo apt-get dist-upgrade
+# sudo apt-get dist-upgrade # probably don't need to do this, but if the next line
+# fails, then I might have to. but it does weird things with headers and the like, 
+# so probably not a good idea in general
+sudo apt-get install ffmpeg
 sudo pip install youtube-dl
 
 
@@ -32,3 +35,9 @@ cd ../
 make all
 make test
 make runtest
+
+
+# get data for places / imagenet / etc
+wget http://places.csail.mit.edu/model/placesCNN_upgraded.tar.gz
+tar -xvf placesCNN_upgraded.tar.gz
+
