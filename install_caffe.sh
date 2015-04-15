@@ -35,9 +35,17 @@ cd ../
 make all
 make test
 make runtest
+make pycaffe
 
 
 # get data for places / imagenet / etc
+mkdir models/
+cd models/
 wget http://places.csail.mit.edu/model/placesCNN_upgraded.tar.gz
 tar -xvf placesCNN_upgraded.tar.gz
 
+wget https://www.dropbox.com/s/4dichqj3e7lyunn/ilsvrc_2012_mean.npy
+wget https://www.dropbox.com/s/21s6i61n5s4jc22/places205CNN_deploy_FC7_upgraded_one.prototxt
+
+# for running a small web server
+sudo pip install web.py

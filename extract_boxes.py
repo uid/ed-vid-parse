@@ -1,5 +1,5 @@
 import scipy
-import numpy
+import numpy as np
 from scipy import io
 import os
 import os.path
@@ -15,7 +15,9 @@ pp = pprint.PrettyPrinter(indent=2)
 # import vidutils
 
 # include caffe
-caffe_root = '/Users/mprat/Documents/repos/caffe-master/'
+caffe_root = '/home/ubuntu/caffe/'
+repo_root = '/home/ubuntu/vid-to-json-deploy/'
+model_root = '/home/ubuntu/models/'
 sys.path.insert(0, caffe_root + 'python')
 
 import caffe
@@ -47,15 +49,22 @@ else:
 # 
 # Variables needed for this task
 #
-vid_dir = '/Users/mprat/Desktop/test_vids/' # directory where the videos live
+# vid_dir = '/Users/mprat/Desktop/test_vids/' # directory where the videos live
 # vid_dir = '/data/vision/torralba/mooc-video/videos/'
 # data_dir = '../data/' # directory where the .mat files live
 
 # caffe stuff
-MODEL_FILE = '/Users/mprat/Documents/repos/vid-to-json-cleaned/data/placesCNN/places205CNN_deploy_FC7_upgraded_one.prototxt'
-CAFFEMODEL_FILE = '/Users/mprat/Documents/repos/vid-to-json-cleaned/data/placesCNN/places205CNN_iter_300000_upgraded.caffemodel'
-MEAN_FILE = '/Users/mprat/Documents/repos/vid-to-json-cleaned/data/bvlc_caffenet/ilsvrc_2012_mean.npy'
+MODEL_FILE = model_root + 'places205CNN_deploy_FC7_upgraded_one.prototxt'
+CAFFEMODEL_FILE = model_root + 'places205CNN_iter_300000_upgraded.caffemodel'
+MEAN_FILE = model_root + 'ilsvrc_2012_mean.npy'
 
 caffe.set_mode_cpu()
 net = caffe.Net(MODEL_FILE, CAFFEMODEL_FILE, caffe.TEST)
 
+transformer = caffe.io.Transformer({'data': net.blobs['data'].data.shape})
+transformer.set_transpose('data', (2, 0, 1))
+transformer.set_mean('data', np.load(model_root + 'ilsvrc_2012_mean.npy').mean(1).mean(1))
+transformer.set_raw_scale('data', 255)
+transformer.set_channel_swap('data', (2, 1, 0))
+
+net.blobs['data'].data[...]
