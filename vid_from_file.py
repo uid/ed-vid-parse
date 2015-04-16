@@ -38,7 +38,7 @@ transformer.set_mean('data', np.load(model_root + 'ilsvrc_2012_mean.npy').mean(1
 # transformer.set_raw_scale('data', 255) # don't need this because opencv reads in 255 scale anyway
 transformer.set_channel_swap('data', (2, 1, 0))
 
-def extract_person_box(frame):
+def extract_box(frame):
 	# input the data
 	net.blobs['data'].data[...] = transformer.preprocess('data', frame)
 	# send it through the net
@@ -65,8 +65,8 @@ def extract_person_box(frame):
 	[y_index, x_index] = np.where(heatmap > thresh)
 	if (len(y_index) > 0 and len(x_index) > 0):
 		box = [min(x_index), min(y_index), max(x_index), max(y_index)]
-		box[2] = box[2] - box[0]
-		box[3] = box[3] - box[1]
+		# box[2] = box[2] - box[0]
+		# box[3] = box[3] - box[1]
 		# bounding_box_patch.set_bounds(box[0], box[1]+box[3], box[2], -1*box[3])
 		return box
 	return []
@@ -78,13 +78,17 @@ def run_video():
 	while (cap.isOpened()):
 		ret, frame = cap.read()
 
-		cv2.imshow('frame', frame)
-
 		# only extract the person box every 10 frames
 		# do some caffe stuff
 		if index%10 == 0:
-			person_box = extract_person_box(frame)
+			person_box = extract_box(frame)
 			print person_box
+			if len(person_box) > 0:
+				# TODO: fix the problem that this right now
+				# is drawing to the scale of the 227x227
+				cv2.rectangle(frame, (person_box[0]*frame.shape[1]/227, person_box[1]*frame.shape[1]/227), (person_box[2]*frame.shape[0]/227, person_box[3]*frame.shape[0]/227), (255, 0, 0))
+
+		cv2.imshow('frame', frame)
 
 		if cv2.waitKey(1) & 0xFF == ord('q'):
 			break
