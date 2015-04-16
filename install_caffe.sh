@@ -49,3 +49,7 @@ wget https://www.dropbox.com/s/21s6i61n5s4jc22/places205CNN_deploy_FC7_upgraded_
 
 # for running a small web server
 sudo pip install web.py
+sudo pip install flup
+
+# install apache for the webserver
+sudo apt-get install apache2

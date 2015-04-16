@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import web
         
 urls = (
@@ -12,4 +14,4 @@ class hello:
         return 'Hello, ' + name + '!'
 
 if __name__ == "__main__":
-    app.run()
+    web.application(urls, globals()).run()
