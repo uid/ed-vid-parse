@@ -19,6 +19,11 @@ people_weight_data = scipy.io.loadmat(weights_root + people_weightfile_name, squ
 people_weight_data = people_weight_data['weights']
 nonzero_people_weights = np.nonzero(people_weight_data)[0]
 
+content_weightfile_name = 'places-content-train-activ-target-50.mat'
+content_weight_data = scipy.io.loadmat(weights_root + content_weightfile_name, squeeze_me=True)
+content_weight_data = content_weight_data['weights']
+nonzero_content_weights = np.nonzero(content_weight_data)[0]
+
 thresh = 0.01
 
 sys.path.insert(0, caffe_root + 'python')
@@ -54,28 +59,35 @@ def extract_box(frame):
 	conv5_features = net.blobs['conv5'].data # the shape is (1, 256, 13, 13)
 	conv5_features = conv5_features[0]
 
-	final_mask = np.zeros((13, 13))
+	people_mask = np.zeros((13, 13))
+	content_mask = np.zeros((13, 13))
 
 	# multiply them by the weights
 	for nonzero_index in nonzero_people_weights:
-		final_mask += conv5_features[nonzero_index] * people_weight_data[nonzero_index]
+		people_mask += conv5_features[nonzero_index] * people_weight_data[nonzero_index]
+	for nonzero_index in nonzero_content_weights:
+		content_mask += conv5_features[nonzero_index] * content_weight_data[nonzero_index]
 
 
 	# transform to heatmap
-	heatmap = scipy.ndimage.zoom(final_mask, 227/13.0, order=1)
+	person_heatmap = scipy.ndimage.zoom(people_mask, 227/13.0, order=1)
+	content_heatmap = scipy.ndimage.zoom(content_mask, 227/13.0, order=1)
+
 	# plt.subplot(1, 2, 1)
 	# plt.imshow(heatmap)
 	# cv2.imshow('heatmap', heatmap)
 
 	# transform to bounding box
-	[y_index, x_index] = np.where(heatmap > thresh)
-	if (len(y_index) > 0 and len(x_index) > 0):
-		box = [min(x_index), min(y_index), max(x_index), max(y_index)]
-		# box[2] = box[2] - box[0]
-		# box[3] = box[3] - box[1]
-		# bounding_box_patch.set_bounds(box[0], box[1]+box[3], box[2], -1*box[3])
-		return box
-	return []
+	[y_index_person, x_index_person] = np.where(person_heatmap > thresh)
+	[y_index_content, x_index_content] = np.where(content_heatmap > thresh)
+	person_box = []
+	content_box = []
+	if (len(y_index_person) > 0 and len(x_index_person) > 0):
+		person_box = [min(x_index_person), min(y_index_person), max(x_index_person), max(y_index_person)]
+	if (len(y_index_content) > 0 and len(x_index_content) > 0):
+		content_box = [min(x_index_content), min(y_index_content), max(x_index_content), max(y_index_content)]
+
+	return (person_box, content_box)
 
 def run_video():
 	cap = cv2.VideoCapture(vid_dir + vid_name + '.mp4')
@@ -87,11 +99,14 @@ def run_video():
 		# only extract the person box every 10 frames
 		# do some caffe stuff
 		if index%20 == 0:
-			person_box = extract_box(frame)
-			print person_box
+			(person_box, content_box) = extract_box(frame)
+			print "Person: ", person_box
+			print "Content: ", content_box
 		if len(person_box) > 0:
-			
 			cv2.rectangle(frame, (int(person_box[0]*frame.shape[1]/227.0), int(person_box[1]*frame.shape[0]/227.0)), (int(person_box[2]*frame.shape[1]/227.0), int(person_box[3]*frame.shape[0]/227.0)), (255, 0, 0))
+
+		if len(content_box) > 0:
+			cv2.rectangle(frame, (int(content_box[0]*frame.shape[1]/227.0), int(content_box[1]*frame.shape[0]/227.0)), (int(content_box[2]*frame.shape[1]/227.0), int(content_box[3]*frame.shape[0]/227.0)), (0, 255, 0))
 
 		cv2.imshow('frame', frame)
 
