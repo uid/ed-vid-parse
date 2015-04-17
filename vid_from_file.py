@@ -3,8 +3,8 @@ import cv2
 import sys
 import scipy
 from scipy import io
-
-global frame
+import skimage
+from skimage import transform
 
 vid_name = "ID-EMaTF9-ArJY"
 
@@ -33,16 +33,22 @@ caffe.set_mode_cpu()
 net = caffe.Net(MODEL_FILE, CAFFEMODEL_FILE, caffe.TEST)
 
 transformer = caffe.io.Transformer({'data': net.blobs['data'].data.shape})
-transformer.set_transpose('data', (2, 0, 1)) # channels, then width, then height
+transformer.set_transpose('data', (2, 0, 1))
 transformer.set_mean('data', np.load(model_root + 'ilsvrc_2012_mean.npy').mean(1).mean(1))
 # transformer.set_raw_scale('data', 255) # don't need this because opencv reads in 255 scale anyway
-transformer.set_channel_swap('data', (2, 1, 0))
+# transformer.set_channel_swap('data', (2, 1, 0)) # opencv is also read in BGR order
+model_mean = np.load(model_root + 'ilsvrc_2012_mean.npy')
 
 def extract_box(frame):
+	f = skimage.transform.resize(frame, (227, 227, 3), preserve_range=True)
+	f = f.transpose((2, 0, 1))
+	f = f - model_mean;
 	# input the data
-	net.blobs['data'].data[...] = transformer.preprocess('data', frame)
+	net.blobs['data'].data[...] = f
 	# send it through the net
 	out = net.forward()
+
+	# cv2.imshow('net_init', transformer.deprocess('data', net.blobs['data'].data[0]))
 
 	# extract the conv5 features
 	conv5_features = net.blobs['conv5'].data # the shape is (1, 256, 13, 13)
@@ -59,7 +65,7 @@ def extract_box(frame):
 	heatmap = scipy.ndimage.zoom(final_mask, 227/13.0, order=1)
 	# plt.subplot(1, 2, 1)
 	# plt.imshow(heatmap)
-	cv2.imshow('heatmap', heatmap)
+	# cv2.imshow('heatmap', heatmap)
 
 	# transform to bounding box
 	[y_index, x_index] = np.where(heatmap > thresh)
@@ -80,13 +86,12 @@ def run_video():
 
 		# only extract the person box every 10 frames
 		# do some caffe stuff
-		if index%10 == 0:
+		if index%20 == 0:
 			person_box = extract_box(frame)
 			print person_box
-			if len(person_box) > 0:
-				# TODO: fix the problem that this right now
-				# is drawing to the scale of the 227x227
-				cv2.rectangle(frame, (person_box[0]*frame.shape[1]/227, person_box[1]*frame.shape[1]/227), (person_box[2]*frame.shape[0]/227, person_box[3]*frame.shape[0]/227), (255, 0, 0))
+		if len(person_box) > 0:
+			
+			cv2.rectangle(frame, (int(person_box[0]*frame.shape[1]/227.0), int(person_box[1]*frame.shape[0]/227.0)), (int(person_box[2]*frame.shape[1]/227.0), int(person_box[3]*frame.shape[0]/227.0)), (255, 0, 0))
 
 		cv2.imshow('frame', frame)
 
