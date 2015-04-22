@@ -20,86 +20,133 @@ vid_name = "ID-EMaTF9-ArJY"
 # vid_name = "ID-paAXl2Ie_as"
 
 
+
+# TODO: make the weight models a bit more easily interchangeable
+
+
 caffe_root = '/Users/mprat/Documents/repos/caffe/'
 repo_root = '/Users/mprat/Documents/repos/vid-to-json-deploy/'
-model_root = '/Users/mprat/Documents/repos/vid-to-json-cleaned/data/placesCNN/'
+model_root = '/Users/mprat/Documents/repos/vid-to-json-cleaned/data/'
 weights_root = '/Users/mprat/Documents/repos/vid-to-json-cleaned/data/conv5_weights/'
 vid_dir = '/Users/mprat/Desktop/test_vids/'
 
-people_weightfile_name = 'places-person-train-activ-target-2.mat'
+person_net_name = 'places'
+person_net_neuron_param = 2
+people_weightfile_name = person_net_name + '-person-train-activ-target-' + str(person_net_neuron_param) + '.mat'
 people_weight_data = scipy.io.loadmat(weights_root + people_weightfile_name, squeeze_me=True)
 people_weight_data = people_weight_data['weights']
 nonzero_people_weights = np.nonzero(people_weight_data)[0]
+people_thresh = 0.1
 
-content_weightfile_name = 'places-content-train-activ-target-2.mat'
+content_net_name = 'hybridplaces'
+content_net_neuron_param = 1
+content_weightfile_name = content_net_name + '-content-train-activ-target-' + str(content_net_neuron_param) + '.mat'
 content_weight_data = scipy.io.loadmat(weights_root + content_weightfile_name, squeeze_me=True)
 content_weight_data = content_weight_data['weights']
 nonzero_content_weights = np.nonzero(content_weight_data)[0]
-
-thresh = 0.1
+content_thresh = 5
 
 sys.path.insert(0, caffe_root + 'python')
 import caffe
 
 # caffe stuff
-PLACES_MODEL_FILE = model_root + 'places205CNN_deploy_FC7_upgraded_one.prototxt'
-PLACES_CAFFEMODEL_FILE = model_root + 'places205CNN_iter_300000_upgraded.caffemodel'
-MEAN_FILE = model_root + 'ilsvrc_2012_mean.npy'
+HYBRIDPLACES_MODEL_FILE = model_root + 'hybridCNN/hybridCNN_deploy_FC7_updated_one.prototxt'
+HYBRIDPLACES_CAFFEMODEL_FILE = model_root + 'hybridCNN/hybridCNN_iter_700000.caffemodel'
+
+PLACES_MODEL_FILE = model_root + 'placesCNN/places205CNN_deploy_FC7_upgraded_one.prototxt'
+PLACES_CAFFEMODEL_FILE = model_root + 'placesCNN/places205CNN_iter_300000_upgraded.caffemodel'
+MEAN_FILE = model_root + 'placesCNN/ilsvrc_2012_mean.npy'
+
+PLACES_TUNED_MODEL_FILE = model_root + 'placesCNN/places205CNN_deploy_FC7_upgraded_one.prototxt'
+PLACES_TUNED_CAFFEMODEL_FILE = model_root + 'placesCNN/finetune_ed_scenes_iter_100000.caffemodel'
 
 caffe.set_mode_cpu()
+
+hybridplaces_net = caffe.Net(HYBRIDPLACES_MODEL_FILE, HYBRIDPLACES_CAFFEMODEL_FILE, caffe.TEST)
 places_net = caffe.Net(PLACES_MODEL_FILE, PLACES_CAFFEMODEL_FILE, caffe.TEST)
 places_tuned_net = caffe.Net(PLACES_TUNED_MODEL_FILE, PLACES_TUNED_CAFFEMODEL_FILE, caffe.TEST)
 
-transformer = caffe.io.Transformer({'data': net.blobs['data'].data.shape})
-transformer.set_transpose('data', (2, 0, 1))
-transformer.set_mean('data', np.load(model_root + 'ilsvrc_2012_mean.npy').mean(1).mean(1))
+# transformer = caffe.io.Transformer({'data': places_net.blobs['data'].data.shape})
+# transformer.set_transpose('data', (2, 0, 1))
+# transformer.set_mean('data', np.load(model_root + 'placesCNN/ilsvrc_2012_mean.npy').mean(1).mean(1))
 # transformer.set_raw_scale('data', 255) # don't need this because opencv reads in 255 scale anyway
 # transformer.set_channel_swap('data', (2, 1, 0)) # opencv is also read in BGR order
-model_mean = np.load(model_root + 'ilsvrc_2012_mean.npy')
+model_mean = np.load(model_root + 'placesCNN/ilsvrc_2012_mean.npy')
 
 def extract_box(frame):
 	f = skimage.transform.resize(frame, (227, 227, 3), preserve_range=True)
 	f = f.transpose((2, 0, 1))
 	f = f - model_mean;
 	# input the data
-	net.blobs['data'].data[...] = f
+	hybridplaces_net.blobs['data'].data[...] = f
+	places_net.blobs['data'].data[...] = f
+	places_tuned_net.blobs['data'].data[...] = f
 	# send it through the net
-	out = net.forward()
+	out_hybridplaces = hybridplaces_net.forward()
+	out_places = places_net.forward()
+	out_places_tuned = places_tuned_net.forward()
 
 	# cv2.imshow('net_init', transformer.deprocess('data', net.blobs['data'].data[0]))
 
 	# extract the conv5 features
-	conv5_features = net.blobs['conv5'].data # the shape is (1, 256, 13, 13)
-	conv5_features = conv5_features[0]
+	hybridplaces_conv5_features = hybridplaces_net.blobs['conv5'].data
+	hybridplaces_conv5_features = hybridplaces_conv5_features[0]
+
+	places_conv5_features = places_net.blobs['conv5'].data # the shape is (1, 256, 13, 13)
+	places_conv5_features = places_conv5_features[0]
+
+	places_tuned_conv5_features = places_tuned_net.blobs['conv5'].data
+	places_tuned_conv5_features = places_tuned_conv5_features[0]
+
+	if (person_net_name == 'places'):
+		person_conv5_features = places_conv5_features
+	elif (person_net_name == 'places-tuned'):
+		person_conv5_features = places_tuned_conv5_features
+	elif (person_net_name == 'hybridplaces'):
+		person_conv5_features = hybridplaces_conv5_features
+	else:
+		sys.exit(0)
+
+	if (content_net_name == 'places'):
+		content_conv5_features = places_conv5_features
+	elif (content_net_name == 'places-tuned'):
+		content_conv5_features = places_tuned_conv5_features
+	elif (content_net_name == 'hybridplaces'):
+		content_conv5_features = hybridplaces_conv5_features
+	else:
+		sys.exit(0)
 
 	people_mask = np.zeros((13, 13))
 	content_mask = np.zeros((13, 13))
 
 	# multiply them by the weights
 	for nonzero_index in nonzero_people_weights:
-		people_mask += conv5_features[nonzero_index] * people_weight_data[nonzero_index]
-	# for nonzero_index in nonzero_content_weights:
-		# content_mask += conv5_features[nonzero_index] * content_weight_data[nonzero_index]
+		people_mask += person_conv5_features[nonzero_index] * people_weight_data[nonzero_index]
+	for nonzero_index in nonzero_content_weights:
+		content_mask += content_conv5_features[nonzero_index] * content_weight_data[nonzero_index]
 
 
 	# transform to heatmap
 	person_heatmap = scipy.ndimage.zoom(people_mask, 227/13.0, order=1)
-	# content_heatmap = scipy.ndimage.zoom(content_mask, 227/13.0, order=1)
+	content_heatmap = scipy.ndimage.zoom(content_mask, 227/13.0, order=1)
 
 	# plt.subplot(1, 2, 1)
 	# plt.imshow(heatmap)
 	cv2.imshow('heatmap person', person_heatmap)
-	# cv2.imshow('heatmap content', content_heatmap)
+	cv2.imshow('heatmap content', content_heatmap)
+
+	print "Person bounds: ", np.amax(person_heatmap), np.amin(person_heatmap)
+	print "Content bounds: ", np.amax(content_heatmap), np.amin(content_heatmap)
 
 	# transform to bounding box
-	[y_index_person, x_index_person] = np.where(person_heatmap > thresh)
-	# [y_index_content, x_index_content] = np.where(content_heatmap > thresh)
+	[y_index_person, x_index_person] = np.where(person_heatmap > people_thresh)
+	[y_index_content, x_index_content] = np.where(content_heatmap > content_thresh)
 	person_box = []
 	content_box = []
 	if (len(y_index_person) > 0 and len(x_index_person) > 0):
 		person_box = [min(x_index_person), min(y_index_person), max(x_index_person), max(y_index_person)]
-	# if (len(y_index_content) > 0 and len(x_index_content) > 0):
-		# content_box = [min(x_index_content), min(y_index_content), max(x_index_content), max(y_index_content)]
+	if (len(y_index_content) > 0 and len(x_index_content) > 0):
+		content_box = [min(x_index_content), min(y_index_content), max(x_index_content), max(y_index_content)]
 
 	return (person_box, content_box)
 
