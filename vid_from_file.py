@@ -8,6 +8,10 @@ from skimage import transform
 import json
 import pprint
 
+# add path of the vidutils directory
+sys.path.append('../vidutils/python')
+import vidutils
+
 pp = pprint.PrettyPrinter(indent=2)
 
 vid_name = "ID-EMaTF9-ArJY"
@@ -19,9 +23,7 @@ vid_name = "ID-EMaTF9-ArJY"
 # vid_name = "ID-JWWDvL9-zbk"
 # vid_name = "ID-paAXl2Ie_as"
 
-
-
-# TODO: make the weight models a bit more easily interchangeable
+display = False
 
 
 caffe_root = '/Users/mprat/Documents/repos/caffe/'
@@ -132,8 +134,9 @@ def extract_box(frame):
 
 	# plt.subplot(1, 2, 1)
 	# plt.imshow(heatmap)
-	cv2.imshow('heatmap person', person_heatmap)
-	cv2.imshow('heatmap content', content_heatmap)
+	if display:
+		cv2.imshow('heatmap person', person_heatmap)
+		cv2.imshow('heatmap content', content_heatmap)
 
 	print "Person bounds: ", np.amax(person_heatmap), np.amin(person_heatmap)
 	print "Content bounds: ", np.amax(content_heatmap), np.amin(content_heatmap)
@@ -165,48 +168,52 @@ def run_video():
 	while (cap.isOpened()):
 		ret, frame = cap.read()
 
-		person = 0
-		content = 0
+		if ret:
+			person = 0
+			content = 0
 
-		cur_msec = cap.get(0) # 0 is the index for getting the msec
-		frame_width = cap.get(3);
-		frame_height = cap.get(4);
-		print "cur_msec = ", cur_msec
+			cur_msec = cap.get(0) # 0 is the index for getting the msec
+			frame_width = cap.get(3);
+			frame_height = cap.get(4);
+			print "cur_msec = ", cur_msec
 
-		# only extract the person box every 10 frames
-		# do some caffe stuff
-		if index%5 == 0:
-			(person_box, content_box) = extract_box(frame)
-			print "Person: ", person_box
-			print "Content: ", content_box
-		if len(person_box) > 0:
-			cv2.rectangle(frame, (int(person_box[0]*frame.shape[1]/227.0), int(person_box[1]*frame.shape[0]/227.0)), (int(person_box[2]*frame.shape[1]/227.0), int(person_box[3]*frame.shape[0]/227.0)), (255, 0, 0))
-			person = 1
+			# only extract the person box every 10 frames
+			# do some caffe stuff
+			if index%5 == 0:
+				(person_box, content_box) = extract_box(frame)
+				print "Person: ", person_box
+				print "Content: ", content_box
+			if len(person_box) > 0:
+				cv2.rectangle(frame, (int(person_box[0]*frame.shape[1]/227.0), int(person_box[1]*frame.shape[0]/227.0)), (int(person_box[2]*frame.shape[1]/227.0), int(person_box[3]*frame.shape[0]/227.0)), (255, 0, 0))
+				person = 1
 
-		if len(content_box) > 0:
-			cv2.rectangle(frame, (int(content_box[0]*frame.shape[1]/227.0), int(content_box[1]*frame.shape[0]/227.0)), (int(content_box[2]*frame.shape[1]/227.0), int(content_box[3]*frame.shape[0]/227.0)), (0, 255, 0))
-			content = 1
+			if len(content_box) > 0:
+				cv2.rectangle(frame, (int(content_box[0]*frame.shape[1]/227.0), int(content_box[1]*frame.shape[0]/227.0)), (int(content_box[2]*frame.shape[1]/227.0), int(content_box[3]*frame.shape[0]/227.0)), (0, 255, 0))
+				content = 1
 
-		cv2.imshow('frame', frame)
+			if display:
+				cv2.imshow('frame', frame)
 
-		if cv2.waitKey(1) & 0xFF == ord('q'):
-			break
+				if cv2.waitKey(1) & 0xFF == ord('q'):
+					break
 
-		index += 1
+			index += 1
 
-		if person == person_prev and content == content_prev:
-			section_info["end_time"] = cur_msec
-			section_info["person"] = person
-			section_info["content"] = content
+			if person == person_prev and content == content_prev:
+				section_info["end_time"] = cur_msec
+				section_info["person"] = person
+				section_info["content"] = content
+			else:
+				segment_list.append(section_info)
+				print segment_list
+				section_id += 1
+				section_info = {"id": section_id, "start_time": cur_msec, "end_time": cur_msec, 
+					"content": content, "person": person}
+
+			person_prev = person
+			content_prev = content
 		else:
-			segment_list.append(section_info)
-			print segment_list
-			section_id += 1
-			section_info = {"id": section_id, "start_time": cur_msec, "end_time": cur_msec, 
-				"content": content, "person": person}
-
-		person_prev = person
-		content_prev = content
+			break
 
 	cap.release()
 	cv2.destroyAllWindows()
