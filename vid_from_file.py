@@ -34,12 +34,17 @@ weights_root = '/Users/mprat/Documents/repos/vid-to-json-cleaned/data/conv5_weig
 vid_dir = '/Users/mprat/Desktop/test_vids/'
 
 person_net_name = 'places'
-person_net_neuron_param = 2
-people_weightfile_name = person_net_name + '-person-train-activ-target-' + str(person_net_neuron_param) + '.mat'
-people_weight_data = scipy.io.loadmat(weights_root + people_weightfile_name, squeeze_me=True)
-people_weight_data = people_weight_data['weights']
-nonzero_people_weights = np.nonzero(people_weight_data)[0]
-people_thresh = 0.1
+# person_net_neuron_param = 2
+# people_weightfile_name = person_net_name + '-person-train-activ-target-' + str(person_net_neuron_param) + '.mat'
+# people_weight_data = scipy.io.loadmat(weights_root + people_weightfile_name, squeeze_me=True)
+# people_weight_data = people_weight_data['weights']
+# nonzero_people_weights = np.nonzero(people_weight_data)[0]
+# people_thresh = 0.1
+person_neuron_nums = [1511, 1731]
+person_weight_data = [0.0057, 0.0212]
+person_heatmap_thresh = 0.03
+person_score_thresh = 7796 # precision and recall both 0.5
+person_num_boxes = 10
 
 content_net_name = 'places'
 # content_net_neuron_param = 1
@@ -50,7 +55,7 @@ content_net_name = 'places'
 content_neuron_nums = [1606, 1979, 910]
 content_weight_data = [0.0025, 0.0114, 0.0065]
 content_heatmap_thresh = 0.01
-content_score_thresh = 1000
+content_score_thresh = 11844 # for precision, recall both = 0.5
 content_num_boxes = 10
 
 sys.path.insert(0, caffe_root + 'python')
@@ -209,7 +214,7 @@ def process_heatmap(heatmap, heatmap_thresh, num_boxes, score_thresh=0):
 	return [bbs, scores]
 
 def extract_box(frame):
-	people_mask = np.zeros((one_mask_size, one_mask_size))
+	person_mask = np.zeros((one_mask_size, one_mask_size))
 	content_mask = np.zeros((one_mask_size, one_mask_size))
 
 	f = skimage.transform.resize(frame, (227, 227, 3), preserve_range=True)
@@ -225,6 +230,17 @@ def extract_box(frame):
 	out_places_tuned = places_tuned_net.forward()
 
 	# people
+	for index in range(len(person_neuron_nums)):
+		neuron_num = person_neuron_nums[index]
+		weight = person_weight_data[index]
+
+		[layer_name, in_layer_index] = neuron_index_to_layer_name(neuron_num)
+		activ = places_net.blobs[layer_name].data
+		activ = activ[0]
+
+		one_activ = activ[in_layer_index]
+		one_activ_scaled = scipy.ndimage.zoom(one_activ, float(one_mask_size) / one_activ.shape[0], order = 1)
+		person_mask += one_activ_scaled * weight
 
 	# content
 	for index in range(len(content_neuron_nums)):
@@ -239,72 +255,25 @@ def extract_box(frame):
 		one_activ_scaled = scipy.ndimage.zoom(one_activ, float(one_mask_size) / one_activ.shape[0], order = 1)
 		content_mask += one_activ_scaled * weight
 
-
-		# # cv2.imshow('net_init', transformer.deprocess('data', net.blobs['data'].data[0]))
-
-		# # extract the conv5 features
-		# hybridplaces_conv5_features = hybridplaces_net.blobs['conv5'].data
-		# hybridplaces_conv5_features = hybridplaces_conv5_features[0]
-
-		# places_conv5_features = places_net.blobs['conv5'].data # the shape is (1, 256, 13, 13)
-		# places_conv5_features = places_conv5_features[0]
-
-		# places_tuned_conv5_features = places_tuned_net.blobs['conv5'].data
-		# places_tuned_conv5_features = places_tuned_conv5_features[0]
-
-		# if (person_net_name == 'places'):
-		# 	person_conv5_features = places_conv5_features
-		# elif (person_net_name == 'places-tuned'):
-		# 	person_conv5_features = places_tuned_conv5_features
-		# elif (person_net_name == 'hybridplaces'):
-		# 	person_conv5_features = hybridplaces_conv5_features
-		# else:
-		# 	sys.exit(0)
-
-		# if (content_net_name == 'places'):
-		# 	content_conv5_features = places_conv5_features
-		# elif (content_net_name == 'places-tuned'):
-		# 	content_conv5_features = places_tuned_conv5_features
-		# elif (content_net_name == 'hybridplaces'):
-		# 	content_conv5_features = hybridplaces_conv5_features
-		# else:
-		# 	sys.exit(0)
-
-
-		# # multiply them by the weights
-		# for nonzero_index in nonzero_people_weights:
-		# 	people_mask += person_conv5_features[nonzero_index] * people_weight_data[nonzero_index]
-		# for nonzero_index in nonzero_content_weights:
-		# 	content_mask += content_conv5_features[nonzero_index] * content_weight_data[nonzero_index]
-
-
 	# transform to heatmap
-	# person_heatmap = scipy.ndimage.zoom(people_mask, 227.0/one_mask_size, order=1)
+	person_heatmap = scipy.ndimage.zoom(person_mask, 227.0/one_mask_size, order=1)
 	content_heatmap = scipy.ndimage.zoom(content_mask, 227.0/one_mask_size, order=1)
 
 	[content_box, content_scores] = process_heatmap(content_heatmap, content_heatmap_thresh, content_num_boxes, content_score_thresh)
+	[person_box, person_scores] = process_heatmap(person_heatmap, person_heatmap_thresh, person_num_boxes, person_score_thresh)
 
-	print "content box inside extract, ",  content_box
-	print "content box scores, ",  content_scores
+	if display:
+		print "content box inside extract, ",  content_box
+		print "content box scores, ",  content_scores
+
+		print "person box inside extract, ", person_box
+		print "person box scores, ", person_scores
 
 	# plt.subplot(1, 2, 1)
 	# plt.imshow(heatmap)
 	if display:
-		# cv2.imshow('heatmap person', person_heatmap)
+		cv2.imshow('heatmap person', person_heatmap)
 		cv2.imshow('heatmap content', content_heatmap)
-
-	# print "Person bounds: ", np.amax(person_heatmap), np.amin(person_heatmap)
-	# print "Content bounds: ", np.amax(content_heatmap), np.amin(content_heatmap)
-
-	# transform to bounding box
-	# [y_index_person, x_index_person] = np.where(person_heatmap > people_thresh)
-	# [y_index_content, x_index_content] = np.where(content_heatmap > content_thresh)
-	person_box = []
-	# content_box = []
-	# if (len(y_index_person) > 0 and len(x_index_person) > 0):
-		# person_box = [min(x_index_person), min(y_index_person), max(x_index_person), max(y_index_person)]
-	# if (len(y_index_content) > 0 and len(x_index_content) > 0):
-		# content_box = [min(x_index_content), min(y_index_content), max(x_index_content), max(y_index_content)]
 
 	return (person_box, content_box)
 
