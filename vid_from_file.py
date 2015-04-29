@@ -8,6 +8,7 @@ from skimage import transform
 import json
 import pprint
 import os
+import math
 
 # add path of the vidutils directory
 sys.path.append('../vid-to-json-cleaned/vidutils/python')
@@ -24,7 +25,7 @@ vid_name = "ID-EMaTF9-ArJY"
 # vid_name = "ID-JWWDvL9-zbk"
 # vid_name = "ID-paAXl2Ie_as"
 
-display = True
+display = False
 one_mask_size = 55
 
 caffe_root = '/Users/mprat/Documents/repos/caffe/'
@@ -42,8 +43,8 @@ person_net_name = 'places'
 # people_thresh = 0.1
 person_neuron_nums = [1511, 1731]
 person_weight_data = [0.0057, 0.0212]
-person_heatmap_thresh = 0.03
-person_score_thresh = 7796 # precision and recall both 0.5
+person_heatmap_thresh = 0.005
+person_score_thresh = 4500 # precision and recall both 0.5
 person_num_boxes = 10
 
 content_net_name = 'places'
@@ -296,9 +297,9 @@ def run_video():
 			person = 0
 			content = 0
 
-			cur_msec = cap.get(0) # 0 is the index for getting the msec
-			frame_width = cap.get(3);
-			frame_height = cap.get(4);
+			cur_msec = int(math.floor(cap.get(cv2.cv.CV_CAP_PROP_POS_MSEC))) # 0 is the index for getting the msec. or it's "video capture timestamp"
+			frame_width = cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)
+			frame_height = cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)
 			print "cur_msec = ", cur_msec
 
 			# only extract the person box every 10 frames
@@ -308,7 +309,9 @@ def run_video():
 				print "Person: ", person_box
 				print "Content: ", content_box
 			if len(person_box) > 0:
-				# cv2.rectangle(frame, (int(person_box[0]*frame.shape[1]/227.0), int(person_box[1]*frame.shape[0]/227.0)), (int(person_box[2]*frame.shape[1]/227.0), int(person_box[3]*frame.shape[0]/227.0)), (255, 0, 0))
+				for j in range(person_box.shape[0]):
+					one_box = person_box[j]
+					cv2.rectangle(frame, (int(one_box[0]*frame.shape[1]/227.0), int(one_box[1]*frame.shape[0]/227.0)), (int(one_box[2]*frame.shape[1]/227.0), int(one_box[3]*frame.shape[0]/227.0)), (0, 255, 0))
 				person = 1
 
 			if len(content_box) > 0:
