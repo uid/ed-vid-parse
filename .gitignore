@@ -1,0 +1,8 @@
+# python files
+*.pyc
+
+# vagrant files
+.vagrant/*
+
+# models files
+models/*
