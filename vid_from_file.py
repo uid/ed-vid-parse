@@ -9,6 +9,7 @@ import json
 import pprint
 import os
 import math
+import argparse
 
 # add path of the vidutils directory
 sys.path.append('../vid-to-json-cleaned/vidutils/python')
@@ -16,7 +17,14 @@ import vidutils
 
 pp = pprint.PrettyPrinter(indent=2)
 
-vid_name = "ID-EMaTF9-ArJY"
+# vid_name = "ID-e7IErqC25nU"
+# vid_name = "ID-BvooIjkNJ24"
+# vid_name = "ID-waIE0L9vfiI"
+vid_name = "ID-zhKN60gDjk8"
+# vid_name = "ID-bfpZRBTo5xc"
+# vid_name = "ID-bGWgqvhUfPU"
+# vid_name = "ID-BcioL4magDg"
+# vid_name = "ID-EMaTF9-ArJY"
 # vid_name = "ID-6mj9wWjAqz0"
 # vid_name = 'ID-b7KNIA4w9lE'
 # vid_name = "ID-epNXEXIFIYQ"
@@ -25,7 +33,7 @@ vid_name = "ID-EMaTF9-ArJY"
 # vid_name = "ID-JWWDvL9-zbk"
 # vid_name = "ID-paAXl2Ie_as"
 
-display = False
+display = True
 one_mask_size = 55
 
 caffe_root = '/Users/mprat/Documents/repos/caffe/'
@@ -41,10 +49,10 @@ person_net_name = 'places'
 # people_weight_data = people_weight_data['weights']
 # nonzero_people_weights = np.nonzero(people_weight_data)[0]
 # people_thresh = 0.1
-person_neuron_nums = [1511, 1731]
-person_weight_data = [0.0057, 0.0212]
-person_heatmap_thresh = 0.005
-person_score_thresh = 4500 # precision and recall both 0.5
+person_neuron_nums = [1511, 1731, 1927, 1844, 1606, 1979, 910, 256]
+person_weight_data = [0.0041, 0.0160, 0.0175, 0.0145, -0.00125, -0.0057, -0.00325, -0.008]
+person_heatmap_thresh = 0.03
+person_score_thresh = 8500
 person_num_boxes = 10
 
 content_net_name = 'places'
@@ -53,10 +61,10 @@ content_net_name = 'places'
 # content_weight_data = scipy.io.loadmat(weights_root + content_weightfile_name, squeeze_me=True)
 # content_weight_data = content_weight_data['weights']
 # nonzero_content_weights = np.nonzero(content_weight_data)[0]
-content_neuron_nums = [1606, 1979, 910]
-content_weight_data = [0.0025, 0.0114, 0.0065]
-content_heatmap_thresh = 0.01
-content_score_thresh = 11844 # for precision, recall both = 0.5
+content_neuron_nums = [1606, 1979, 910, 256]
+content_weight_data = [0.0025, 0.0091, 0.0063, 0.016]
+content_heatmap_thresh = 0.02
+content_score_thresh = 3000
 content_num_boxes = 10
 
 sys.path.insert(0, caffe_root + 'python')
@@ -304,7 +312,7 @@ def run_video():
 
 			# only extract the person box every 10 frames
 			# do some caffe stuff
-			if index%5 == 0:
+			if index%10 == 0:
 				(person_box, content_box) = extract_box(frame)
 				print "Person: ", person_box
 				print "Content: ", content_box
@@ -343,6 +351,8 @@ def run_video():
 			person_prev = person
 			content_prev = content
 		else:
+			segment_list.append(section_info)
+			print segment_list
 			break
 
 	cap.release()
