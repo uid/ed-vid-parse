@@ -8,63 +8,39 @@ from skimage import transform
 import json
 import pprint
 import os
+import subprocess
+import re
 import math
 import argparse
 
-# add path of the vidutils directory
-sys.path.append('../vid-to-json-cleaned/vidutils/python')
-import vidutils
+# extract people and content from the video
+# expects command-line argument "--filename FILENAME"
 
 pp = pprint.PrettyPrinter(indent=2)
 
-# vid_name = "ID-e7IErqC25nU"
-# vid_name = "ID-BvooIjkNJ24"
-# vid_name = "ID-waIE0L9vfiI"
-vid_name = "ID-zhKN60gDjk8"
-# vid_name = "ID-bfpZRBTo5xc"
-# vid_name = "ID-bGWgqvhUfPU"
-# vid_name = "ID-BcioL4magDg"
-# vid_name = "ID-EMaTF9-ArJY"
-# vid_name = "ID-6mj9wWjAqz0"
-# vid_name = 'ID-b7KNIA4w9lE'
-# vid_name = "ID-epNXEXIFIYQ"
-# vid_name = "ID-ESKcD9x2Wrg"
-# vid_name = "ID-eu5pb97DhGs"
-# vid_name = "ID-JWWDvL9-zbk"
-# vid_name = "ID-paAXl2Ie_as"
-
-display = True
+display = False
+show_score = True
 one_mask_size = 55
+crop_size = 227
 
-caffe_root = '/Users/mprat/Documents/repos/caffe/'
-repo_root = '/Users/mprat/Documents/repos/vid-to-json-deploy/'
-model_root = '/Users/mprat/Documents/repos/vid-to-json-cleaned/data/'
-weights_root = '/Users/mprat/Documents/repos/vid-to-json-cleaned/data/conv5_weights/'
-vid_dir = '/Users/mprat/Desktop/test_vids/'
+caffe_root = '/home/vagrant/caffe/'
+repo_root = '/vagrant/'
+model_root = '/vagrant/models/'
+vid_dir = '/vagrant/vids/'
+json_dir = 'jsons/'
 
 person_net_name = 'places'
-# person_net_neuron_param = 2
-# people_weightfile_name = person_net_name + '-person-train-activ-target-' + str(person_net_neuron_param) + '.mat'
-# people_weight_data = scipy.io.loadmat(weights_root + people_weightfile_name, squeeze_me=True)
-# people_weight_data = people_weight_data['weights']
-# nonzero_people_weights = np.nonzero(people_weight_data)[0]
-# people_thresh = 0.1
-person_neuron_nums = [1511, 1731, 1927, 1844, 1606, 1979, 910, 256]
-person_weight_data = [0.0041, 0.0160, 0.0175, 0.0145, -0.00125, -0.0057, -0.00325, -0.008]
+person_neuron_nums = [1511, 1731] #, 1927, 1844, 1606, 1979, 910, 256]
+person_weight_data = [0.0057, 0.0212] #, 0.0160, 0.0175, 0.0145, -0.00125, -0.0057, -0.00325, -0.008]
 person_heatmap_thresh = 0.03
-person_score_thresh = 8500
+person_score_thresh = 7000
 person_num_boxes = 10
 
 content_net_name = 'places'
-# content_net_neuron_param = 1
-# content_weightfile_name = content_net_name + '-content-train-activ-target-' + str(content_net_neuron_param) + '.mat'
-# content_weight_data = scipy.io.loadmat(weights_root + content_weightfile_name, squeeze_me=True)
-# content_weight_data = content_weight_data['weights']
-# nonzero_content_weights = np.nonzero(content_weight_data)[0]
 content_neuron_nums = [1606, 1979, 910, 256]
 content_weight_data = [0.0025, 0.0091, 0.0063, 0.016]
 content_heatmap_thresh = 0.02
-content_score_thresh = 3000
+content_score_thresh = 8000
 content_num_boxes = 10
 
 sys.path.insert(0, caffe_root + 'python')
@@ -78,21 +54,22 @@ PLACES_MODEL_FILE = model_root + 'placesCNN/places205CNN_deploy_FC7_upgraded_one
 PLACES_CAFFEMODEL_FILE = model_root + 'placesCNN/places205CNN_iter_300000_upgraded.caffemodel'
 MEAN_FILE = model_root + 'placesCNN/ilsvrc_2012_mean.npy'
 
-PLACES_TUNED_MODEL_FILE = model_root + 'placesCNN/places205CNN_deploy_FC7_upgraded_one.prototxt'
-PLACES_TUNED_CAFFEMODEL_FILE = model_root + 'placesCNN/finetune_ed_scenes_iter_100000.caffemodel'
+# PLACES_TUNED_MODEL_FILE = model_root + 'placesCNN/places205CNN_deploy_FC7_upgraded_one.prototxt'
+# PLACES_TUNED_CAFFEMODEL_FILE = model_root + 'placesCNN/finetune_ed_scenes_iter_100000.caffemodel'
 
 caffe.set_mode_cpu()
 
 hybridplaces_net = caffe.Net(HYBRIDPLACES_MODEL_FILE, HYBRIDPLACES_CAFFEMODEL_FILE, caffe.TEST)
 places_net = caffe.Net(PLACES_MODEL_FILE, PLACES_CAFFEMODEL_FILE, caffe.TEST)
-places_tuned_net = caffe.Net(PLACES_TUNED_MODEL_FILE, PLACES_TUNED_CAFFEMODEL_FILE, caffe.TEST)
+# places_tuned_net = caffe.Net(PLACES_TUNED_MODEL_FILE, PLACES_TUNED_CAFFEMODEL_FILE, caffe.TEST)
 
-# transformer = caffe.io.Transformer({'data': places_net.blobs['data'].data.shape})
-# transformer.set_transpose('data', (2, 0, 1))
-# transformer.set_mean('data', np.load(model_root + 'placesCNN/ilsvrc_2012_mean.npy').mean(1).mean(1))
-# transformer.set_raw_scale('data', 255) # don't need this because opencv reads in 255 scale anyway
-# transformer.set_channel_swap('data', (2, 1, 0)) # opencv is also read in BGR order
-model_mean = np.load(model_root + 'placesCNN/ilsvrc_2012_mean.npy')
+model_mean = np.load(repo_root + 'ilsvrc_2012_mean.npy')
+model_mean = skimage.transform.resize(model_mean, (crop_size, crop_size, 3), preserve_range=True)
+model_mean = model_mean.transpose((2, 0, 1))
+
+def get_video_length_secs(vid_name, vid_dir):
+	probe = subprocess.check_output(["ffprobe", "-v", "quiet",  "-show_format",  vid_dir + vid_name + ".mp4"])
+	return int(float(re.search("duration=\d+.?\d+", probe).group(0)[9:]))
 
 def neuron_index_to_layer_name(i):
 	layer_name = ''
@@ -226,17 +203,17 @@ def extract_box(frame):
 	person_mask = np.zeros((one_mask_size, one_mask_size))
 	content_mask = np.zeros((one_mask_size, one_mask_size))
 
-	f = skimage.transform.resize(frame, (227, 227, 3), preserve_range=True)
+	f = skimage.transform.resize(frame, (crop_size, crop_size, 3), preserve_range=True)
 	f = f.transpose((2, 0, 1))
 	f = f - model_mean;
 	# input the data
 	hybridplaces_net.blobs['data'].data[...] = f
 	places_net.blobs['data'].data[...] = f
-	places_tuned_net.blobs['data'].data[...] = f
+	# places_tuned_net.blobs['data'].data[...] = f
 	# send it through the net
 	out_hybridplaces = hybridplaces_net.forward()
 	out_places = places_net.forward()
-	out_places_tuned = places_tuned_net.forward()
+	# out_places_tuned = places_tuned_net.forward()
 
 	# people
 	for index in range(len(person_neuron_nums)):
@@ -271,7 +248,7 @@ def extract_box(frame):
 	[content_box, content_scores] = process_heatmap(content_heatmap, content_heatmap_thresh, content_num_boxes, content_score_thresh)
 	[person_box, person_scores] = process_heatmap(person_heatmap, person_heatmap_thresh, person_num_boxes, person_score_thresh)
 
-	if display:
+	if show_score:
 		print "content box inside extract, ",  content_box
 		print "content box scores, ",  content_scores
 
@@ -286,7 +263,7 @@ def extract_box(frame):
 
 	return (person_box, content_box)
 
-def run_video():
+def run_video(vid_name):
 	segment_list = []
 	content_prev = 0
 	person_prev = 0
@@ -341,7 +318,7 @@ def run_video():
 				section_info["end_time"] = cur_msec
 				section_info["person"] = person
 				section_info["content"] = content
-			else:
+			elif index > 2:
 				segment_list.append(section_info)
 				print segment_list
 				section_id += 1
@@ -352,21 +329,48 @@ def run_video():
 			content_prev = content
 		else:
 			segment_list.append(section_info)
-			print segment_list
+			pp.pprint(segment_list)
 			break
 
 	cap.release()
 	cv2.destroyAllWindows()
 
-	final_dict = {"youtubeID": vid_name[3:], "length": vidutils.get_video_length_secs(vid_name, vid_dir), "segments": segment_list}
+	final_dict = {"youtubeID": vid_name[3:], "length": get_video_length_secs(vid_name, vid_dir), "segments": segment_list}
 	# pp.pprint(final_dict)
 	return final_dict
 
 if __name__ == '__main__':
-	final_dict = run_video()
-	pp.pprint(final_dict)
-	json_dir = vid_dir + 'jsons/'
-	if not os.path.isdir(json_dir):
-		os.system('mkdir ' + json_dir)
+	# vid_name = "ID-e7IErqC25nU"
+	# vid_name = "ID-BvooIjkNJ24"
+	# vid_name = "ID-waIE0L9vfiI"
+	# vid_name = "ID-zhKN60gDjk8"
+	# vid_name = "ID-bfpZRBTo5xc"
+	# vid_name = "ID-bGWgqvhUfPU"
+	# vid_name = "ID-BcioL4magDg"
+	# vid_name = "ID-EMaTF9-ArJY"
+	# vid_name = "ID-6mj9wWjAqz0"
+	# vid_name = 'ID-b7KNIA4w9lE'
+	# vid_name = "ID-epNXEXIFIYQ"
+	# vid_name = "ID-ESKcD9x2Wrg"
+	# vid_name = "ID-eu5pb97DhGs"
+	# vid_name = "ID-JWWDvL9-zbk"
+	# vid_name = "ID-paAXl2Ie_as"
+
+	# parse the command-line arguments
+	parser = argparse.ArgumentParser("Turn a video into a JSON with person and content annotations")
+	parser.add_argument('--filename', metavar="filename", type=str)
+
+	args = parser.parse_args()
+
+	if not args.filename:
+		print "Must provide a filename. Exiting."
+		sys.exit(0)
+	else:
+		filename = args.filename
+
+	vid_name = filename.split('/')[-1][:-4]
+
+	final_dict = run_video(vid_name)
+	# pp.pprint(final_dict)
 	with open(json_dir + vid_name + '.json', 'w') as outfile:
 		json.dump(final_dict, outfile)

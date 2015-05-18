@@ -38,7 +38,8 @@ apt-get install -y libffi-dev
 # install pip
 wget https://bootstrap.pypa.io/get-pip.py
 python get-pip.py
-# apt-get install -y python-pip
+# remove the file we downloaded to get pip
+rm get-pip.py
 
 # upgrade pip
 pip install --upgrade pip
@@ -53,6 +54,8 @@ pip install youtube-dl
 
 # do all the model fetching and stuff
 cd /vagrant/
+mkdir vids/
+mkdir jsons/
 mkdir models/
 cd models/
 mkdir imagenet/
@@ -61,9 +64,17 @@ wget http://dl.caffe.berkeleyvision.org/bvlc_reference_caffenet.caffemodel
 wget https://www.dropbox.com/s/4dichqj3e7lyunn/ilsvrc_2012_mean.npy
 cd ../
 wget http://places.csail.mit.edu/model/placesCNN_upgraded.tar.gz
-tar -xvf placesCNN_upgraded.tar.gz -C placesCNN --strip-components=1
+mkdir placesCNN/
+tar -xvf placesCNN_upgraded.tar.gz -C placesCNN
 rm placesCNN_upgraded.tar.gz
+wget http://places.csail.mit.edu/model/hybridCNN_upgraded.tar.gz
+mkdir hybridCNN/
+tar -xvf hybridCNN_upgraded.tar.gz -C hybridCNN
+rm hybridCNN_upgraded.tar.gz
+cd placesCNN/
 wget https://www.dropbox.com/s/21s6i61n5s4jc22/places205CNN_deploy_FC7_upgraded_one.prototxt
+cd ../hybridCNN/
+wget https://www.dropbox.com/s/zekwp0whb5rebng/hybridCNN_deploy_FC7_updated_one.prototxt
 
 # copy the caffe clone from my github repo to make sure that
 # there are no problems with versining
@@ -78,6 +89,10 @@ make pycaffe
 make test
 make runtest
 
+
+# disable libdc1394 error with this hacky solution
+# from stackoverflow: http://stackoverflow.com/questions/12689304/ctypes-error-libdc1394-error-failed-to-initialize-libdc1394
+ln /dev/null /dev/raw1394
 
 SCRIPT
 
