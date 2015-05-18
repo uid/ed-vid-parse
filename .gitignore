@@ -6,3 +6,7 @@
 
 # models files
 models/*
+
+# video files
+*.mp4
+*.avi

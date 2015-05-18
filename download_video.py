@@ -2,7 +2,6 @@ import argparse
 import os
 import os.path
 import subprocess
-import yaml
 import sys
 
 # check if video exists
@@ -22,11 +21,6 @@ def download_video(youtube_url, vid_dir, vid_id):
 	except:
 		print "There was a problem, most likely with the URL. The video might not exist anymore."
 		sys.exit(0)
-
-def read_config():
-	with open("config.yml", 'r') as ymlfile:
-		cfg = yaml.load(ymlfile)
-	return cfg
 
 # for now, a hacky way of finding the video ID
 def url_to_vid_id(youtube_url):
@@ -52,10 +46,8 @@ if __name__ == '__main__':
 
 	vid_id = url_to_vid_id(youtube_url)
 
-	# read the configuration file
-	# to get the video directory
+	# video directory is always vids/
+	vid_dir = 'vids/'
 
-	cfg = read_config()
-	vid_dir = cfg['vid_dir']
 
 	download_video(youtube_url, vid_dir, vid_id)
