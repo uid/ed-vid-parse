@@ -10,3 +10,6 @@ models/*
 # video files
 *.mp4
 *.avi
+
+# output JSON files
+jsons/*
